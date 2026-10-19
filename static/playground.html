@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pake JS Playground</title>
+
+<!-- CodeMirror 6 core + autocomplete + JavaScript language -->
+<!-- <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@codemirror/view@6/dist/index.css"> -->
+<!-- <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@codemirror/autocomplete@6/dist/index.css"> -->
+
+<style>
+  :root {
+    --bg: #1e1e2e;
+    --panel: #181825;
+    --border: #313244;
+    --text: #cdd6f4;
+    --accent: #89b4fa;
+    --error: #f38ba8;
+    --warn: #f9e2af;
+    --success: #a6e3a1;
+    --muted: #6c7086;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: flex; flex-direction: column;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 16px; border-bottom: 1px solid var(--border);
+    background: var(--panel);
+  }
+  header h1 { font-size: 15px; font-weight: 600; margin: 0; flex: 1; }
+  header .badge {
+    font-size: 11px; color: var(--muted); border: 1px solid var(--border);
+    padding: 2px 8px; border-radius: 999px;
+  }
+  .toolbar {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    padding: 8px 16px; border-bottom: 1px solid var(--border);
+    background: var(--panel);
+  }
+  .toolbar button, .toolbar select {
+    background: #313244; color: var(--text); border: 1px solid var(--border);
+    padding: 6px 12px; border-radius: 6px; font-size: 13px; cursor: pointer;
+    transition: background .15s;
+  }
+  .toolbar button:hover, .toolbar select:hover { background: #45475a; }
+  .toolbar button.primary { background: var(--accent); color: #11111b; border-color: var(--accent); font-weight: 600; }
+  .toolbar button.primary:hover { background: #b4befe; }
+  .toolbar label { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .main {
+    flex: 1; display: flex; min-height: 0;
+  }
+  .pane { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .pane + .pane { border-left: 1px solid var(--border); }
+  .pane-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 6px 12px; font-size: 12px; color: var(--muted);
+    border-bottom: 1px solid var(--border); background: var(--panel);
+  }
+
+  /* Editor container replaces textarea */
+  #editor {
+    flex: 1;
+    overflow: auto;
+    background: var(--bg);
+    font-size: 14px;
+  }
+
+  /* CodeMirror theme overrides */
+  .cm-editor {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+  }
+  .cm-scroller {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    line-height: 1.55;
+    padding: 12px 16px;
+  }
+  .cm-gutters {
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    color: var(--muted);
+  }
+  .cm-activeLine {
+    background: rgba(137, 180, 250, 0.06);
+  }
+  .cm-selectionBackground {
+    background: rgba(137, 180, 250, 0.25) !important;
+  }
+  .cm-tooltip-autocomplete {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    overflow: hidden;
+  }
+  .cm-tooltip-autocomplete > ul > li {
+    padding: 4px 12px;
+    color: var(--text);
+  }
+  .cm-tooltip-autocomplete > ul > li[aria-selected] {
+    background: #313244;
+    color: var(--accent);
+  }
+  .cm-completionLabel { font-family: inherit; }
+  .cm-completionDetail { color: var(--muted); font-style: italic; margin-left: 8px; }
+  .cm-completionIcon { margin-right: 6px; }
+
+  #output {
+    flex: 1; overflow: auto; padding: 12px 16px;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 13px; line-height: 1.55; white-space: pre-wrap; word-break: break-word;
+  }
+  .msg { margin-bottom: 4px; }
+  .msg.log { color: var(--text); }
+  .msg.info { color: var(--accent); }
+  .msg.warn { color: var(--warn); }
+  .msg.error { color: var(--error); }
+  .msg.result { color: var(--success); }
+  .msg.done { color: var(--muted); font-style: italic; }
+  .status {
+    padding: 4px 16px; font-size: 12px; color: var(--muted);
+    border-top: 1px solid var(--border); background: var(--panel);
+    display: flex; justify-content: space-between;
+  }
+  .hint { font-size: 12px; color: var(--muted); }
+  @media (max-width: 700px) {
+    .main { flex-direction: column; }
+    .pane + .pane { border-left: 0; border-top: 1px solid var(--border); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>⚡ Pake JS Playground</h1>
+  <span class="badge">sandboxed / direct</span>
+</header>
+
+<div class="toolbar">
+  <button class="primary" id="runBtn" title="Ctrl+Enter">▶ Run</button>
+  <button id="clearBtn">Clear output</button>
+  <button id="exampleBtn">Load example</button>
+  <label>
+    Mode:
+    <select id="mode">
+      <option value="sandbox">Sandboxed (iframe)</option>
+      <option value="direct">Direct (eval)</option>
+    </select>
+  </label>
+  <span class="hint" id="modeHint">Code runs in a sandboxed iframe with no access to Pake APIs.</span>
+</div>
+
+<div class="main">
+  <div class="pane">
+    <div class="pane-header">
+      <span>JavaScript</span>
+      <span class="hint">Ctrl+Enter to run · Ctrl+Space for autocomplete</span>
+    </div>
+    <div id="editor"></div>
+  </div>
+  <div class="pane">
+    <div class="pane-header">
+      <span>Output</span>
+      <button id="clearOutputSmall" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;">clear</button>
+    </div>
+    <div id="output"></div>
+  </div>
+</div>
+
+<div class="status">
+  <span id="statusText">Ready</span>
+  <span id="timing"></span>
+</div>
+
+<script type="module">
+// import { EditorView, basicSetup } from "https://cdn.jsdelivr.net/npm/codemirror@6/dist/index.js";
+// import { javascript } from "https://cdn.jsdelivr.net/npm/@codemirror/lang-javascript@6/dist/index.js";
+// import { autocompletion, closeBrackets } from "https://cdn.jsdelivr.net/npm/@codemirror/autocomplete@6/dist/index.js";
+// import { keymap } from "https://cdn.jsdelivr.net/npm/@codemirror/view@6/dist/index.js";
+// import { indentWithTab } from "https://cdn.jsdelivr.net/npm/@codemirror/commands@6/dist/index.js";
+import {
+  EditorView,
+  basicSetup,
+  javascript,
+  autocompletion,
+  keymap,
+  indentWithTab
+} from './codemirror.bundle.js';
+
+(() => {
+  'use strict';
+
+  const outputEl = document.getElementById('output');
+  const runBtn = document.getElementById('runBtn');
+  const clearBtn = document.getElementById('clearBtn');
+  const clearOutputSmall = document.getElementById('clearOutputSmall');
+  const exampleBtn = document.getElementById('exampleBtn');
+  const modeEl = document.getElementById('mode');
+  const modeHint = document.getElementById('modeHint');
+  const statusText = document.getElementById('statusText');
+  const timing = document.getElementById('timing');
+
+  const STORAGE_KEY = 'pake-playground-code';
+  const DEFAULT_CODE = `// Welcome to the Pake JS Playground!
+// Press Ctrl+Enter (or Cmd+Enter) to run.
+
+const greet = (name) => \`Hello, \${name}!\`;
+console.log(greet('Pake'));
+
+// Try some math:
+[1, 2, 3].map(x => x * 2);
+
+// Objects are pretty-printed:
+console.log({ app: 'Pake', runtime: 'Tauri', engine: 'system webview' });
+
+// Errors are caught and shown:
+// throw new Error('Something went wrong');`;
+
+  let editor = null;
+  let sandboxIframe = null;
+  let sandboxReady = false;
+  let pendingResolve = null;
+  let pendingLogs = [];
+
+  /* -------------------------------------------------
+     Initialise CodeMirror editor
+  --------------------------------------------------*/
+  function initEditor() {
+    const saved = localStorage.getItem(STORAGE_KEY) || DEFAULT_CODE;
+
+    const theme = EditorView.theme({
+      '&': { height: '100%', backgroundColor: 'var(--bg)', color: 'var(--text)' },
+      '.cm-content': { caretColor: 'var(--accent)' },
+      '.cm-cursor': { borderLeftColor: 'var(--accent)' },
+      '.cm-gutters': { backgroundColor: 'var(--panel)', color: 'var(--muted)', border: 'none' },
+      '.cm-activeLineGutter': { backgroundColor: 'transparent', color: 'var(--accent)' },
+    }, { dark: true });
+
+    editor = new EditorView({
+      doc: saved,
+      extensions: [
+        basicSetup,
+        javascript({ jsx: false, typescript: false }),
+        autocompletion({
+          activateOnTyping: true,
+          maxRenderedOptions: 30,
+        }),
+        keymap.of([
+          indentWithTab,
+          {
+            key: 'Ctrl-Enter',
+            mac: 'Cmd-Enter',
+            run: () => { run(); return true; },
+          },
+        ]),
+        theme,
+        EditorView.updateListener.of((update) => {
+          if (update.docChanged) {
+            localStorage.setItem(STORAGE_KEY, update.state.doc.toString());
+          }
+        }),
+      ],
+      parent: document.getElementById('editor'),
+    });
+  }
+
+  /* -------------------------------------------------
+     Helpers (same as before)
+  --------------------------------------------------*/
+  function updateModeHint() {
+    if (modeEl.value === 'sandbox') {
+      modeHint.textContent = 'Code runs in a sandboxed iframe with no access to Pake APIs.';
+    } else {
+      modeHint.textContent = 'Code runs with eval() in the page. Requires CSP "unsafe-eval". Can access window.__TAURI__.';
+    }
+  }
+
+  function clearOutput() {
+    outputEl.innerHTML = '';
+    timing.textContent = '';
+  }
+
+  function appendMessage(type, text) {
+    const div = document.createElement('div');
+    div.className = 'msg ' + type;
+    div.textContent = text;
+    outputEl.appendChild(div);
+    outputEl.scrollTop = outputEl.scrollHeight;
+  }
+
+  function formatValue(value) {
+    if (typeof value === 'string') return value;
+    if (value === undefined) return 'undefined';
+    if (value === null) return 'null';
+    if (typeof value === 'function') return value.toString();
+    try {
+      return JSON.stringify(value, null, 2);
+    } catch {
+      return String(value);
+    }
+  }
+
+  /* -------------------------------------------------
+     Sandbox (unchanged)
+  --------------------------------------------------*/
+  function createSandbox() {
+    if (sandboxIframe) {
+      sandboxIframe.remove();
+    }
+    sandboxReady = false;
+    pendingResolve = null;
+    pendingLogs = [];
+
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('sandbox', 'allow-scripts');
+    iframe.style.position = 'absolute';
+    iframe.style.left = '-9999px';
+    iframe.style.width = '1px';
+    iframe.style.height = '1px';
+    iframe.style.border = '0';
+    iframe.style.visibility = 'hidden';
+
+    iframe.srcdoc = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>
+<script>
+(function() {
+  'use strict';
+  const send = (type, payload) => {
+    try {
+      parent.postMessage({ __pakePlayground: true, type, payload }, '*');
+    } catch (e) { /* ignore */ }
+  };
+  const format = (arg) => {
+    if (typeof arg === 'string') return arg;
+    if (arg === undefined) return 'undefined';
+    if (arg === null) return 'null';
+    if (typeof arg === 'function') return arg.toString();
+    try { return JSON.stringify(arg, null, 2); } catch { return String(arg); }
+  };
+  ['log', 'info', 'warn', 'error', 'debug'].forEach((method) => {
+    const original = console[method];
+    console[method] = (...args) => {
+      send(method === 'debug' ? 'log' : method, args.map(format).join(' '));
+      try { original.apply(console, args); } catch (e) {}
+    };
+  });
+  window.onerror = (msg, url, line, col, err) => {
+    send('error', (err && err.stack) || (msg + ' (line ' + line + ':' + col + ')'));
+    return true;
+  };
+  window.addEventListener('unhandledrejection', (e) => {
+    send('error', 'Unhandled rejection: ' + format(e.reason));
+  });
+  window.addEventListener('message', (event) => {
+    if (!event.data || !event.data.__pakePlaygroundRun) return;
+    const code = event.data.code;
+    send('started', null);
+    let finished = false;
+    const done = () => {
+      if (finished) return;
+      finished = true;
+      send('done', null);
+    };
+    try {
+      const result = eval(code);
+      if (result !== undefined) send('result', format(result));
+      if (result && typeof result.then === 'function') {
+        result.then((asyncResult) => {
+          if (asyncResult !== undefined) send('result', format(asyncResult));
+          done();
+        }).catch((err) => {
+          send('error', (err && err.stack) || String(err));
+          done();
+        });
+      } else {
+        done();
+      }
+    } catch (err) {
+      send('error', (err && err.stack) || String(err));
+      done();
+    }
+  });
+  send('ready', null);
+})();
+<\/script></body></html>`;
+
+    document.body.appendChild(iframe);
+    sandboxIframe = iframe;
+
+    window.addEventListener('message', onSandboxMessage);
+  }
+
+  function onSandboxMessage(event) {
+    if (!sandboxIframe || event.source !== sandboxIframe.contentWindow) return;
+    const data = event.data;
+    if (!data || !data.__pakePlayground) return;
+
+    switch (data.type) {
+      case 'ready':
+        sandboxReady = true;
+        break;
+      case 'log':
+      case 'info':
+      case 'warn':
+      case 'error':
+      case 'result':
+        pendingLogs.push({ type: data.type, text: data.payload });
+        appendMessage(data.type, data.payload);
+        break;
+      case 'done':
+        if (pendingResolve) {
+          pendingResolve(pendingLogs);
+          pendingResolve = null;
+          pendingLogs = [];
+        }
+        break;
+    }
+  }
+
+  function runInSandbox(code) {
+    return new Promise((resolve) => {
+      if (!sandboxReady) {
+        let attempts = 0;
+        const interval = setInterval(() => {
+          if (sandboxReady || attempts++ > 50) {
+            clearInterval(interval);
+            if (!sandboxReady) {
+              resolve([{ type: 'error', text: 'Sandbox failed to initialise.' }]);
+              return;
+            }
+            doRun();
+          }
+        }, 50);
+        return;
+      }
+      doRun();
+
+      function doRun() {
+        pendingResolve = resolve;
+        pendingLogs = [];
+        sandboxIframe.contentWindow.postMessage({ __pakePlaygroundRun: true, code }, '*');
+      }
+    });
+  }
+
+  /* -------------------------------------------------
+     Direct eval (unchanged)
+  --------------------------------------------------*/
+  function runDirect(code) {
+    return new Promise((resolve) => {
+      const logs = [];
+      const originalConsole = {};
+      const methods = ['log', 'info', 'warn', 'error', 'debug'];
+      methods.forEach((m) => {
+        originalConsole[m] = console[m];
+        console[m] = (...args) => {
+          const text = args.map(formatValue).join(' ');
+          logs.push({ type: m === 'debug' ? 'log' : m, text });
+          appendMessage(m === 'debug' ? 'log' : m, text);
+          originalConsole[m].apply(console, args);
+        };
+      });
+
+      const finish = (result) => {
+        methods.forEach((m) => (console[m] = originalConsole[m]));
+        if (result !== undefined) {
+          const text = formatValue(result);
+          logs.push({ type: 'result', text });
+          appendMessage('result', text);
+        }
+        resolve(logs);
+      };
+
+      try {
+        const result = eval(code);
+        if (result && typeof result.then === 'function') {
+          result.then(finish).catch((err) => {
+            const text = (err && err.stack) || String(err);
+            logs.push({ type: 'error', text });
+            appendMessage('error', text);
+            finish(undefined);
+          });
+        } else {
+          finish(result);
+        }
+      } catch (err) {
+        const text = (err && err.stack) || String(err);
+        logs.push({ type: 'error', text });
+        appendMessage('error', text);
+        finish(undefined);
+      }
+    });
+  }
+
+  /* -------------------------------------------------
+     Run
+  --------------------------------------------------*/
+  async function run() {
+    clearOutput();
+    const code = editor.state.doc.toString();
+    if (!code.trim()) {
+      appendMessage('warn', 'Nothing to run.');
+      return;
+    }
+
+    statusText.textContent = 'Running…';
+    timing.textContent = '';
+    const start = performance.now();
+
+    const mode = modeEl.value;
+    let logs;
+    try {
+      if (mode === 'sandbox') {
+        logs = await runInSandbox(code);
+      } else {
+        logs = await runDirect(code);
+      }
+    } catch (err) {
+      logs = [{ type: 'error', text: String(err) }];
+      appendMessage('error', String(err));
+    } finally {
+      const elapsed = performance.now() - start;
+      timing.textContent = elapsed.toFixed(1) + ' ms';
+      statusText.textContent = 'Done';
+    }
+
+    if (logs && logs.length === 0) {
+      appendMessage('done', '(no output)');
+    }
+  }
+
+  /* -------------------------------------------------
+     Boot
+  --------------------------------------------------*/
+  function init() {
+    initEditor();
+    runBtn.addEventListener('click', run);
+    clearBtn.addEventListener('click', clearOutput);
+    clearOutputSmall.addEventListener('click', clearOutput);
+    exampleBtn.addEventListener('click', () => {
+      if (editor) {
+        editor.dispatch({
+          changes: { from: 0, to: editor.state.doc.length, insert: DEFAULT_CODE },
+        });
+      }
+      localStorage.setItem(STORAGE_KEY, DEFAULT_CODE);
+      clearOutput();
+    });
+    modeEl.addEventListener('change', updateModeHint);
+    updateModeHint();
+    createSandbox();
+    statusText.textContent = 'Ready';
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
